@@ -64,8 +64,17 @@ bool readfile(int sock, FILE *f)
 
 void receiveFile(int sockfd)
 {
-    string filename = to_string(sockfd) + "recv.mkv";
-    FILE *filehandle = fopen(filename.c_str(), "wb");
+    long fnameSize;
+    char filename[1024];
+    if (!readlong(sockfd, &fnameSize)){
+        cerr << "\n[-] Filename reception failed";
+        return;
+    }
+    if (!readdata(sockfd, filename, fnameSize)){
+        cerr << "\n[-] Filename reception failed";
+        return ;
+    }
+    FILE *filehandle = fopen(filename, "wb");
     if (filehandle != NULL)
     {
         bool ok = readfile(sockfd, filehandle);
@@ -75,7 +84,7 @@ void receiveFile(int sockfd)
             // use file as needed...
         }
         else
-            remove(filename.c_str());
+            remove(filename);
     }
 }
 

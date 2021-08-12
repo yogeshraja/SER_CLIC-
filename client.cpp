@@ -37,10 +37,15 @@ bool sendlong(int sock, long value)
 bool sendfile(int sock, fileQueue *fileData)
 {
     FILE *f = fileData->fp;
-    fseek(f, 0, SEEK_END);
-    long filesize = ftell(f);
+    long filesize = fileData->filesize;
+    string filename = fileData->filename;
+    long fnameLength = filename.size();
     long ptrack = filesize;
-    rewind(f);
+    if(!sendlong(sock,fnameLength))
+        return false;
+    if(!senddata(sock,(void *)filename.c_str(),fnameLength)){
+        return false;
+    }
     if (filesize == EOF)
         return false;
     if (!sendlong(sock, filesize))
