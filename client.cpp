@@ -85,15 +85,11 @@ void openFile()
             getchar();
             openFile();
         }
-        else if(toupper(choice)=='N')
+        else
         {
             flag = false;
             cout << "\n[+] Starting " << fq.size() << " transfer(s)...";
             return;
-        }
-        else{
-            while(getchar()!='\n');
-            goto check;
         }
     }
     fq.push(obj);
@@ -103,12 +99,8 @@ void openFile()
         getchar();
         openFile();
     }
-    else if(toupper(choice)=='N'){
-        cout << "\n[+] Starting " << fq.size() << " transfer(s)..."<<endl;
-    }
     else{
-        while(getchar()!='\n');
-        goto check2;
+        cout << "\n[+] Starting " << fq.size() << " transfer(s)..."<<endl;
     }
 }
 
@@ -136,6 +128,10 @@ int main()
     }
     cout << "[+]Connected to the server on port " << PORT << endl;
     openFile();
+    long filecount = fq.size();
+    if(!sendlong(sockfd,filecount)){
+        cerr << "\n[-] File count transfer failed";
+    }
     while (!fq.empty())
     {
         cout << "\n[+] Transferring " << fq.front()->filename<<endl;

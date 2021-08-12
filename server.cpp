@@ -1,6 +1,9 @@
 #include <bits/stdc++.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include "headers/fileQueue.h"
+#include "progressbar.h"
 #define PORT 8989
 
 using namespace std;
@@ -64,6 +67,7 @@ bool readfile(int sock, FILE *f)
 
 void receiveFile(int sockfd)
 {
+    mkdir("received",0777);
     long fnameSize;
     char filename[1024];
     if (!readlong(sockfd, &fnameSize)){
@@ -74,6 +78,8 @@ void receiveFile(int sockfd)
         cerr << "\n[-] Filename reception failed";
         return ;
     }
+    filename[fnameSize] = '\0';
+    cout << "\n[+] Receiving " << filename << endl;
     FILE *filehandle = fopen(filename, "wb");
     if (filehandle != NULL)
     {
@@ -133,7 +139,14 @@ int main()
         exit(-4);
     }
     cout << "[+]Connected to the client sock_fd:" << newsock << endl;
-    receiveFile(newsock);
+    long fileCount;
+    if (!readlong(newsock, &fileCount))
+    {
+        cerr << "\n[-] Filecount reception failed";
+    }
+    cout << "\n[+] Receiving " << fileCount << " files"<<endl;
+    while (fileCount--)
+        receiveFile(newsock);
     close(newsock);
     close(sockfd);
 }
