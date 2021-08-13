@@ -20,48 +20,56 @@ public:
         fileQueue *temp = fpQueue.front();
         fclose(temp->fp);
         fpQueue.pop();
-        cout << "\n[+] File Processing --- remaining files to process: " << fpQueue.size()<<endl;
+        cout << "\n[+] File Processing --- remaining files to process: " << fpQueue.size() << endl;
         mtx.unlock();
         return temp;
     }
-    bool addFile(fileQueue *fq){
+    bool addFile(fileQueue *fq)
+    {
         mtx.lock();
         fpQueue.push(fq);
-        cout << "\n[+] File added --- remaining files to process: " << fpQueue.size()<<endl;
+        cout << "\n[+] File added --- remaining files to process: " << fpQueue.size() << endl;
         mtx.unlock();
         return true;
     }
 
-    bool isEmpty(){
+    bool isEmpty()
+    {
         return fpQueue.empty();
     }
 
-    filePool(){
+    filePool()
+    {
         cout << "\n[+] filepool initialized " << endl;
     }
 
-    void fileProcessor(filePool *fp, fileQueue *fq){
+    void fileProcessor(filePool *fp, fileQueue *fq)
+    {
         string data;
-        FILE *filehandle=fq->fp;
         char delimiter = fq->delimiter;
         int columNo = fq->columno;
-        fstream fs(fq->filepath,ios::in);
+        fstream fs(fq->filepath, ios::in);
         int i = 0;
-        while (getline(fs,data,delimiter))
+        while (getline(fs, data, delimiter))
         {
             i++;
-            if(i==columNo){
+            if (i == columNo)
+            {
                 fs.trunc;
                 fs << data;
             }
         }
-        if(i!=columNo)
-            cerr << "\n[-] Processing the file " << fq->filename << " failed";
         fs.close();
-        fstream ofs(fq->filepath, ios::out|ios::trunc);
-        ofs<<data;
-        ofs.close();
-        fp->threadCount --;
-        cout << "\n[+] file " << fq->filename << "Processed successfully";
+
+        if (i != columNo)
+            cerr << "\n[-] Processing the file " << fq->filename << " failed" << endl;
+        else
+        {
+            fstream ofs(fq->filepath, ios::out | ios::trunc);
+            ofs << data;
+            ofs.close();
+            cout << "\n[+] file " << fq->filename << " processed successfully" << endl;
         }
+        fp->threadCount--;
+    }
 };

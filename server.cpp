@@ -112,7 +112,7 @@ void receiveFile(nsock sockfd)
     long colno;
     string serverFolder = SER_FOLDER;
     filename[fnameSize] = '\0';
-    cout << "\n[+] Receiving " << filename << endl;
+    cout << "\n[+] Receiving " << filename;
 
     string fname = serverFolder + "/" + string(filename);
 
@@ -128,6 +128,7 @@ void receiveFile(nsock sockfd)
         else
             remove(filename);
     }
+    string rfilename = string(filename);
     if (!readlong(sockfd, (long *)&delim))
     {
         return;
@@ -136,19 +137,21 @@ void receiveFile(nsock sockfd)
     {
         return;
     }
-    cout << "\n[+] Delimiter is " << delim << endl;
-    cout << "\n[+] Colum number is " << colno << endl;
-    fileQueue *fq = new fileQueue(string(filename), filehandle, delim, colno);
+    cout << "\n[+] Delimiter is " << delim;
+    cout << "\n[+] Colum number is " << colno<<endl;
+    fileQueue *fq = new fileQueue(rfilename, filehandle, delim, colno);
     fq->filepath = fname;
     poolHandler->addFile(fq);
 }
 
 void clientThread(nsock newsock)
 {
-    long fileCount;
+    long fileCount=0;
     if (!readlong(newsock, &fileCount))
     {
         cerr << "\n[-] Filecount reception failed";
+        cerr << "\n[-] Disconnecting the client"<<endl;
+        return;
     }
     cout << "\n[+] Receiving " << fileCount << " files" << endl;
     while (fileCount--)
@@ -191,8 +194,6 @@ int main(int argc, char **args)
         exit(-3);
     }
     cout << "[+] listening on port " << PORT << endl;
-    vector<thread> tPool;
-    int tSize = 0;
     thread fileprocessorthread(ProcessFiles);
     while (true)
     {
@@ -207,15 +208,10 @@ int main(int argc, char **args)
         }
 #endif
         cout << "[+] Connected to the client sock_fd:" << newsock << endl;
-        if (newsock != -1)
-            tPool.push_back(thread(clientThread, newsock));
-        // close(newsock);
-        if (T_MAX <= tSize)
-            break;
-    }
-    while (--tSize)
-    {
-        tPool.at(tSize).join();
+        if (newsock != -1){
+            thread temp(clientThread, newsock);
+            temp.detach();
+        }
     }
     fileprocessorthread.join();
     close(sockfd);

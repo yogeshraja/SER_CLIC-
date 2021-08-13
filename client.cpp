@@ -107,6 +107,7 @@ void openFile()
         cout << "\n[+] Please enter the column number: ";
         cin >> obj->columno;
         cout << "\n[+] The column number is " << obj->columno;
+        getchar();
         fq.push(obj);
     }
     cout << "\n[+] Would you like to add more files[Y/n]: ";
