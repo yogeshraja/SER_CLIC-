@@ -2,13 +2,23 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include "headers/fileQueue.h"
-#include "progressbar.h"
+#include "headers/progressbar.h"
+#include "headers/filePool.h"
 #define PORT 8989
-
+#define T_MAX 10
+#define SER_FOLDER "Received"
 using namespace std;
 
-bool readdata(int sock, void *buf, int buflen)
+#ifdef _WIN32
+typedef SOCKET nsock;
+#endif
+
+#ifdef __linux__
+typedef int nsock;
+#endif
+
+filePool *poolHandler=new filePool();
+bool readdata(nsock sock, void *buf, int buflen)
 {
     unsigned char *pbuf = (unsigned char *)buf;
 
@@ -30,7 +40,24 @@ bool readdata(int sock, void *buf, int buflen)
     return true;
 }
 
-bool readlong(int sock, long *value)
+void callFileProcessor(filePool *fp,fileQueue *fq){
+    poolHandler->fileProcessor(fp,fq);
+}
+
+void ProcessFiles(){
+    cout << "\n[+] Files processor initiated... "<<endl;
+    while(true){
+        if(poolHandler->threadCount<=T_MAX && !poolHandler->isEmpty()){
+            fileQueue *tempfq = poolHandler->getFile();
+            poolHandler->threadCount++;
+            thread t(callFileProcessor, poolHandler, tempfq);
+            t.detach();
+        }
+    }
+}
+
+
+bool readlong(nsock sock, long *value)
 {
     if (!readdata(sock, value, sizeof(value)))
         return false;
@@ -38,7 +65,7 @@ bool readlong(int sock, long *value)
     return true;
 }
 
-bool readfile(int sock, FILE *f)
+bool readfile(nsock sock, FILE *f)
 {
     long filesize;
     if (!readlong(sock, &filesize))
@@ -65,26 +92,35 @@ bool readfile(int sock, FILE *f)
     return true;
 }
 
-void receiveFile(int sockfd)
+void receiveFile(nsock sockfd)
 {
-    mkdir("received",0777);
+    mkdir(SER_FOLDER, 0777);
     long fnameSize;
     char filename[1024];
-    if (!readlong(sockfd, &fnameSize)){
+    if (!readlong(sockfd, &fnameSize))
+    {
         cerr << "\n[-] Filename reception failed";
         return;
     }
-    if (!readdata(sockfd, filename, fnameSize)){
+
+    if (!readdata(sockfd, filename, fnameSize))
+    {
         cerr << "\n[-] Filename reception failed";
-        return ;
+        return;
     }
+    char delim;
+    long colno;
+    string serverFolder = SER_FOLDER;
     filename[fnameSize] = '\0';
     cout << "\n[+] Receiving " << filename << endl;
-    FILE *filehandle = fopen(filename, "wb");
+
+    string fname = serverFolder + "/" + string(filename);
+
+    FILE *filehandle = fopen(fname.c_str(), "wb");
     if (filehandle != NULL)
     {
         bool ok = readfile(sockfd, filehandle);
-        fclose(filehandle);
+        // fclose(filehandle);
         if (ok)
         {
             // use file as needed...
@@ -92,11 +128,37 @@ void receiveFile(int sockfd)
         else
             remove(filename);
     }
+    if (!readlong(sockfd, (long *)&delim))
+    {
+        return;
+    }
+    if (!readlong(sockfd, &colno))
+    {
+        return;
+    }
+    cout << "\n[+] Delimiter is " << delim << endl;
+    cout << "\n[+] Colum number is " << colno << endl;
+    fileQueue *fq = new fileQueue(string(filename), filehandle, delim, colno);
+    fq->filepath = fname;
+    poolHandler->addFile(fq);
 }
 
-int main()
+void clientThread(nsock newsock)
 {
-    int sockfd;
+    long fileCount;
+    if (!readlong(newsock, &fileCount))
+    {
+        cerr << "\n[-] Filecount reception failed";
+    }
+    cout << "\n[+] Receiving " << fileCount << " files" << endl;
+    while (fileCount--)
+        receiveFile(newsock);
+    close(newsock);
+}
+
+int main(int argc, char **args)
+{
+    nsock sockfd;
     sockaddr_in sockdesc;
 
     //create a socket and store the socket file descrptor
@@ -105,10 +167,10 @@ int main()
     //exit on scoket creating failure
     if (sockfd == -1)
     {
-        cerr << "[-]socket creation failed \n";
+        cerr << "[-] socket creation failed \n";
         exit(-1);
     }
-    cout << "[+]socket creation successful sock_fd:" << sockfd << endl;
+    cout << "[+] socket creation successful sock_fd:" << sockfd << endl;
     sockdesc.sin_family = AF_INET;
     sockdesc.sin_port = htons(PORT);
     sockdesc.sin_addr.s_addr = INADDR_ANY;
@@ -119,34 +181,42 @@ int main()
     //bind the socket to an interface
     if (bind(sockfd, (struct sockaddr *)&sockdesc, sizeof(sockdesc)) == -1)
     {
-        cerr << "[-]bind to port " << PORT << " failed\n";
+        cerr << "[-] bind to port " << PORT << " failed\n";
         exit(-2);
     }
-    cout << "[+]bind to port " << PORT << " successful\n";
+    cout << "[+] bind to port " << PORT << " successful\n";
     if (listen(sockfd, 3) == -1)
     {
-        cerr << "[-]set port to listen failed \n";
+        cerr << "[-] set port to listen failed \n";
         exit(-3);
     }
-    cout << "[+]listening on port " << PORT << endl;
-    socklen_t newsock;
-    sockaddr_in newaddr;
-    socklen_t newaddrlen = sizeof(newaddr);
-    newsock = accept(sockfd, (struct sockaddr *)&newaddr, &newaddrlen);
-    if (newsock == -1)
+    cout << "[+] listening on port " << PORT << endl;
+    vector<thread> tPool;
+    int tSize = 0;
+    thread fileprocessorthread(ProcessFiles);
+    while (true)
     {
-        cerr << "[-]Connection with the client failed \n";
-        exit(-4);
+        nsock newsock;
+        sockaddr_in newaddr;
+        socklen_t newaddrlen = sizeof(newaddr);
+        newsock = accept(sockfd, (struct sockaddr *)&newaddr, &newaddrlen);
+#ifdef __linux__
+        if (newsock == -1)
+        {
+            cerr << "[-] Connection with the client failed \n";
+        }
+#endif
+        cout << "[+] Connected to the client sock_fd:" << newsock << endl;
+        if (newsock != -1)
+            tPool.push_back(thread(clientThread, newsock));
+        // close(newsock);
+        if (T_MAX <= tSize)
+            break;
     }
-    cout << "[+]Connected to the client sock_fd:" << newsock << endl;
-    long fileCount;
-    if (!readlong(newsock, &fileCount))
+    while (--tSize)
     {
-        cerr << "\n[-] Filecount reception failed";
+        tPool.at(tSize).join();
     }
-    cout << "\n[+] Receiving " << fileCount << " files"<<endl;
-    while (fileCount--)
-        receiveFile(newsock);
-    close(newsock);
+    fileprocessorthread.join();
     close(sockfd);
 }

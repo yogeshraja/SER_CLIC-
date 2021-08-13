@@ -25,6 +25,8 @@ class fileQueue{
         string filename;
         string filepath;
         double filesize;
+        char delimiter;
+        int columno;
 
         fileQueue(string fname){
             filename = fname;
@@ -36,6 +38,20 @@ class fileQueue{
             else{
                 cout << "\n[+] " << filename << ": " << detFileSize(fp);
             }
+        }
+
+        fileQueue(string fname,FILE *f,char delim,int colno){
+            filename=fname;
+            delimiter = delim;
+            columno = colno;
+            fp = f;
+        }
+
+        fileQueue(string fname, char delim, int colno)
+        {
+            filename = fname;
+            delimiter = delim;
+            columno = colno;
         }
 };
 
