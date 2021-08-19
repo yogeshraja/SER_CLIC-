@@ -1,8 +1,16 @@
 #include <bits/stdc++.h>
-#include <threads.h>
 #include <condition_variable>
 #include "fileQueue.h"
 #define MAX_THREAD_COUNT 4
+
+#ifdef _WIN32
+#include<thread>
+#endif
+
+#ifdef __linux__
+#include <threads.h>
+#endif
+
 using namespace std;
 
 class filePool

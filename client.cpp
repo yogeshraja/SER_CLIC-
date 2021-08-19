@@ -1,23 +1,42 @@
 #include <bits/stdc++.h>
-#include <arpa/inet.h>
 #include <unistd.h>
 #include "headers/progressbar.h"
 #include "headers/fileQueue.h"
 #define PORT 8989
+
+#ifdef __linux__
+#include <arpa/inet.h>
+typedef int nsock;
+#endif
+
+#ifdef _WIN32
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <ws2tcpip.h>
+#include <winsock2.h>
+#pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Mswsock.lib")
+#pragma comment(lib, "AdvApi32.lib")
+typedef SOCKET nsock;
+
+#endif
+
 using namespace std;
 
 queue<fileQueue *> fq;
 
+#ifdef __linux__
 bool senddata(int sock, void *buf, int buflen)
 {
     unsigned char *pbuf = (unsigned char *)buf;
 
     while (buflen > 0)
     {
-        int num = send(sock, pbuf, buflen, 0);
+        int num = send(sock, (const char *)pbuf, buflen, 0);
         if (num == -1)
         {
-            cerr << "\n[-]Error occured while transmitting"<<endl;
+            cerr << "\n[-]Error occured while transmitting" << endl;
             return false;
         }
 
@@ -27,6 +46,7 @@ bool senddata(int sock, void *buf, int buflen)
 
     return true;
 }
+#endif
 
 bool sendlong(int sock, long value)
 {
@@ -41,9 +61,10 @@ bool sendfile(int sock, fileQueue *fileData)
     string filename = fileData->filename;
     long fnameLength = filename.size();
     long ptrack = filesize;
-    if(!sendlong(sock,fnameLength))
+    if (!sendlong(sock, fnameLength))
         return false;
-    if(!senddata(sock,(void *)filename.c_str(),fnameLength)){
+    if (!senddata(sock, (void *)filename.c_str(), fnameLength))
+    {
         return false;
     }
     if (filesize == EOF)
@@ -88,7 +109,7 @@ void openFile()
     if (obj->fp == NULL)
     {
         cout << "\n[+] Would you like to retry[Y/n]: ";
-        if (toupper(choice=getchar()) == 'Y')
+        if (toupper(choice = getchar()) == 'Y')
         {
             getchar();
             openFile();
@@ -100,7 +121,8 @@ void openFile()
             return;
         }
     }
-    else{
+    else
+    {
         cout << "\n[+] Please enter the delimiter: ";
         obj->delimiter = getchar();
         cout << "\n[+] The delimiter is " << obj->delimiter;
@@ -111,13 +133,14 @@ void openFile()
         fq.push(obj);
     }
     cout << "\n[+] Would you like to add more files[Y/n]: ";
-    if (toupper(choice=getchar()) == 'Y' && flag)
+    if (toupper(choice = getchar()) == 'Y' && flag)
     {
         getchar();
         openFile();
     }
-    else{
-        cout << "\n[+] Starting " << fq.size() << " transfer(s)..."<<endl;
+    else
+    {
+        cout << "\n[+] Starting " << fq.size() << " transfer(s)..." << endl;
     }
 }
 
@@ -136,7 +159,7 @@ int main()
     sockdesc.sin_port = htons(PORT);
     sockdesc.sin_addr.s_addr = INADDR_ANY;
     memset(sockdesc.sin_zero, 0, sizeof(sockdesc.sin_zero));
-    socklen_t sockdescsize = sizeof(sockdesc);
+    long sockdescsize = sizeof(sockdesc);
 
     if ((connect(sockfd, (struct sockaddr *)&sockdesc, sockdescsize)) == -1)
     {
@@ -146,13 +169,14 @@ int main()
     cout << "[+] connected to the server on port " << PORT << endl;
     openFile();
     long filecount = fq.size();
-    if(!sendlong(sockfd,filecount)){
+    if (!sendlong(sockfd, filecount))
+    {
         cerr << "\n[-] File count transfer failed";
     }
     while (!fq.empty())
     {
-        cout << "\n[+] Transferring " << fq.front()->filename<<endl;
-        cout << (sendfile(sockfd, fq.front()) ? "\nTransfer successful" : "\nTransfer failed")<<endl;
+        cout << "\n[+] Transferring " << fq.front()->filename << endl;
+        cout << (sendfile(sockfd, fq.front()) ? "\nTransfer successful" : "\nTransfer failed") << endl;
         removeFileFromQueue(fq);
     }
 
