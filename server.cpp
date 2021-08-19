@@ -7,9 +7,7 @@
 #define W_PORT "8989"
 #define T_MAX 10
 #define SER_FOLDER "Received"
-#include<winsock2.h>
 using namespace std;
-
 
 //Windows specific includes
 #ifdef _WIN32
@@ -18,9 +16,9 @@ using namespace std;
 #include <windows.h>
 #include <ws2tcpip.h>
 
-#pragma comment(lib, "Ws2_32.lib")
-#pragma comment(lib, "Mswsock.lib")
-#pragma comment(lib, "AdvApi32.lib")
+#pragma comment(lib, "Ws2_32")
+#pragma comment(lib, "Mswsock")
+#pragma comment(lib, "AdvApi32")
 
 typedef SOCKET nsock;
 typedef struct addrinfo sockaddrinfo;
@@ -39,10 +37,10 @@ filePool *poolHandler = new filePool();
 //Function to read data from the socket
 bool readdata(nsock sock, void *buf, int buflen)
 {
-    unsigned char *pbuf = (unsigned char *)buf;
-
+    char *pbuf = (char *)buf;
     while (buflen > 0)
     {
+        char readbuf[1024];
         int num = recv(sock, pbuf, buflen, 0);
         if (num == -1)
         {
@@ -80,8 +78,6 @@ void ProcessFiles()
         }
     }
 }
-
-
 
 bool readlong(nsock sock, long *value)
 {
@@ -130,10 +126,10 @@ void receiveFile(nsock sockfd)
     char filename[1024];
     if (!readlong(sockfd, &fnameSize))
     {
-        cerr << "\n[-] Filename reception failed";
+        cerr << "\n[-] Filename length reception failed";
         return;
     }
-
+    cout << "\n file name length : " << fnameSize;
     if (!readdata(sockfd, filename, fnameSize))
     {
         cerr << "\n[-] Filename reception failed";
@@ -152,11 +148,7 @@ void receiveFile(nsock sockfd)
     {
         bool ok = readfile(sockfd, filehandle);
         // fclose(filehandle);
-        if (ok)
-        {
-            // use file as needed...
-        }
-        else
+        if (!ok)
             remove(filename);
     }
     string rfilename = string(filename);
@@ -198,23 +190,27 @@ int main(int argc, char **args)
 #ifdef _WIN32
     WSADATA WSAData;
     struct addrinfo *result = NULL;
-    if(WSAStartup(MAKEWORD(2,2),&WSAData)!=0){
-        cerr<<"\n[-] WSAStatup failed ";
+    if (WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
+    {
+        cerr << "\n[-] WSAStatup failed ";
         exit(-1);
     }
-    ZeroMemory(&sockdesc,sizeof(sockdesc));
+    ZeroMemory(&sockdesc, sizeof(sockdesc));
     sockdesc.ai_family = AF_INET;
+    sockdesc.ai_socktype = SOCK_STREAM;
     sockdesc.ai_protocol = IPPROTO_TCP;
     sockdesc.ai_flags = AI_PASSIVE;
 
-    if((getaddrinfo(NULL,W_PORT,&sockdesc,&result))!=0){
-        cerr<<"\n[-] getaddrinfo failed ";
+    if ((getaddrinfo(NULL, W_PORT, &sockdesc, &result)) != 0)
+    {
+        cerr << "\n[-] getaddrinfo failed ";
         WSACleanup();
         return 1;
     }
     cout << "\n[+] address resolution successful ";
-    if((sockfd=socket(result->ai_family,result->ai_socktype,result->ai_protocol))==INVALID_SOCKET){
-        cerr << "\n[-] socket creation failed with error "<<WSAGetLastError();
+    if ((sockfd = socket(result->ai_family, result->ai_socktype, result->ai_protocol)) == INVALID_SOCKET)
+    {
+        cerr << "\n[-] socket creation failed with error " << WSAGetLastError();
         freeaddrinfo(result);
         WSACleanup();
         return 1;
@@ -222,13 +218,41 @@ int main(int argc, char **args)
     cout << "\n[+] socket creation successful sock_fd: " << sockfd;
     freeaddrinfo(result);
 
-    if((listen(sockfd,SOMAXCONN))==SOCKET_ERROR){
+    if((bind(sockfd,result->ai_addr,(int)result->ai_addrlen))==SOCKET_ERROR){
+        cerr<<"\n[-] bind failed with error:"<<WSAGetLastError();
+        freeaddrinfo(result);
+        closesocket(sockfd);
+        WSACleanup();
+        return 1;
+    }
+    cout << "\n[+] bound to port " << W_PORT;
+
+    if ((listen(sockfd, SOMAXCONN)) == SOCKET_ERROR)
+    {
         cerr << "\n[-] listening to the port failed ";
         closesocket(sockfd);
         WSACleanup();
         return 1;
     }
-    closesocket(sockfd);
+    cout << "\n[+] listening on port " << W_PORT;
+    thread fileprocessorthread(ProcessFiles);
+    while (true)
+    {
+        nsock newsock;
+        sockaddrinfo newaddr;
+        int newaddrlen = sizeof(newaddr);
+        newsock = accept(sockfd, (struct sockaddr *)&newaddr, &newaddrlen);
+        if (newsock == INVALID_SOCKET)
+        {
+            cerr << "[-] Connection with the client failed \n";
+        }
+        else
+        {
+            cout << "\n[+] Connected to the client sock_fd:" << newsock << endl;
+            thread temp(clientThread, newsock);
+            temp.detach();
+        }
+    }
 #endif
 
 #ifdef __linux__
@@ -262,7 +286,6 @@ int main(int argc, char **args)
         exit(-3);
     }
     cout << "[+] listening on port " << PORT << endl;
-#endif
     thread fileprocessorthread(ProcessFiles);
     while (true)
     {
@@ -270,12 +293,10 @@ int main(int argc, char **args)
         sockaddrinfo newaddr;
         int newaddrlen = sizeof(newaddr);
         newsock = accept(sockfd, (struct sockaddr *)&newaddr, &newaddrlen);
-#ifdef __linux__
         if (newsock == -1)
         {
             cerr << "[-] Connection with the client failed \n";
         }
-#endif
         cout << "[+] Connected to the client sock_fd:" << newsock << endl;
         if (newsock != -1)
         {
@@ -283,6 +304,7 @@ int main(int argc, char **args)
             temp.detach();
         }
     }
+#endif
     fileprocessorthread.join();
     close(sockfd);
 }

@@ -3,33 +3,36 @@
 #include "headers/progressbar.h"
 #include "headers/fileQueue.h"
 #define PORT 8989
+#define W_PORT "8989"
+using namespace std;
 
-#ifdef __linux__
-#include <arpa/inet.h>
-typedef int nsock;
-#endif
-
+//Windows specific includes
 #ifdef _WIN32
-
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <ws2tcpip.h>
 #include <winsock2.h>
-#pragma comment(lib, "Ws2_32.lib")
-#pragma comment(lib, "Mswsock.lib")
-#pragma comment(lib, "AdvApi32.lib")
-typedef SOCKET nsock;
 
+#pragma comment(lib, "Ws2_32")
+#pragma comment(lib, "Mswsock")
+#pragma comment(lib, "AdvApi32")
+
+typedef SOCKET nsock;
+typedef struct addrinfo sockaddrinfo;
 #endif
 
-using namespace std;
+//linux specific includes
+#ifdef __linux__
+#include <arpa/inet.h>
+typedef int nsock;
+typedef sockaddr_in sockaddrinfo;
+#endif
 
 queue<fileQueue *> fq;
 
-#ifdef __linux__
 bool senddata(int sock, void *buf, int buflen)
 {
-    unsigned char *pbuf = (unsigned char *)buf;
+    char *pbuf = (char *)buf;
 
     while (buflen > 0)
     {
@@ -46,7 +49,6 @@ bool senddata(int sock, void *buf, int buflen)
 
     return true;
 }
-#endif
 
 bool sendlong(int sock, long value)
 {
@@ -144,10 +146,63 @@ void openFile()
     }
 }
 
-int main()
+int main(int argc, char **args)
 {
-    int sockfd;
-    sockaddr_in sockdesc;
+    nsock sockfd;
+    sockaddrinfo sockdesc;
+    if (argc != 2)
+    {
+        cerr << "\n[-] Usage: " << args[0] << " server-name/ip-address";
+        exit(-1);
+    }
+#ifdef _WIN32
+    WSADATA WSAData;
+    sockaddrinfo *result = NULL, *ptr = NULL;
+    if (WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
+    {
+        cerr << "\n[-] WSAStartup failed";
+        exit(-1);
+    }
+    ZeroMemory(&sockdesc, sizeof(sockdesc));
+    sockdesc.ai_family = AF_INET;
+    sockdesc.ai_socktype = SOCK_STREAM;
+    sockdesc.ai_protocol = IPPROTO_TCP;
+
+    if ((getaddrinfo(args[1], W_PORT, &sockdesc, &result)))
+    {
+        cerr << "\n[-] Failed to resolve server error-code: " << WSAGetLastError();
+        WSACleanup();
+        return 1;
+    }
+    //Connect to one of the resolved addresses
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
+    {
+        //create a socket
+        if ((sockfd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol)) == INVALID_SOCKET)
+        {
+            cerr << "\n[-] socket creation failed with error " << WSAGetLastError();
+            WSACleanup();
+            return 1;
+        }
+        //connect to the server
+        if ((connect(sockfd, ptr->ai_addr, (int)ptr->ai_addrlen)) == SOCKET_ERROR)
+        {
+            closesocket(sockfd);
+            sockfd = INVALID_SOCKET;
+            continue;
+        }
+        break;
+    }
+    freeaddrinfo(result);
+    if (sockfd == -1)
+    {
+        cerr << "\n[-] unable to connect to the server ";
+        WSACleanup();
+        return 1;
+    }
+    cout << "\n[+] socket creation successful sock_fd:" << sockfd;
+#endif
+#ifdef __linux__
     //create a socket
     if ((sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
     {
@@ -166,6 +221,7 @@ int main()
         cerr << "[-] connection to the server failed \n";
         exit(-2);
     }
+#endif
     cout << "[+] connected to the server on port " << PORT << endl;
     openFile();
     long filecount = fq.size();
