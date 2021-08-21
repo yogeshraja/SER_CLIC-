@@ -8,7 +8,7 @@
 #endif
 
 #ifdef __linux__
-#include <threads.h>
+#include <thread>
 #endif
 
 using namespace std;

@@ -18,14 +18,17 @@ using namespace std;
 #pragma comment(lib, "AdvApi32")
 
 typedef SOCKET nsock;
-typedef struct addrinfo sockaddrinfo;
 #endif
 
 //linux specific includes
 #ifdef __linux__
 #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#define PF_INET 2
+#define AF_INET PF_INET
+#define AI_PASSIVE 0x0001
 typedef int nsock;
-typedef sockaddr_in sockaddrinfo;
 #endif
 
 queue<fileQueue *> fq;
@@ -105,12 +108,12 @@ void openFile()
     char choice;
     bool flag = true;
     FILE *filehandle;
-    cout << "\nPlease enter the filename or the path to the file: ";
+    std::cout << "\nPlease enter the filename or the path to the file: ";
     getline(cin, file);
     fileQueue *obj = new fileQueue(file);
     if (obj->fp == NULL)
     {
-        cout << "\n[+] Would you like to retry[Y/n]: ";
+        std::cout << "\n[+] Would you like to retry[Y/n]: ";
         if (toupper(choice = getchar()) == 'Y')
         {
             getchar();
@@ -119,22 +122,22 @@ void openFile()
         else
         {
             flag = false;
-            cout << "\n[+] Starting " << fq.size() << " transfer(s)...";
+            std::cout << "\n[+] Starting " << fq.size() << " transfer(s)...";
             return;
         }
     }
     else
     {
-        cout << "\n[+] Please enter the delimiter: ";
+        std::cout << "\n[+] Please enter the delimiter: ";
         obj->delimiter = getchar();
-        cout << "\n[+] The delimiter is " << obj->delimiter;
-        cout << "\n[+] Please enter the column number: ";
+        std::cout << "\n[+] The delimiter is " << obj->delimiter;
+        std::cout << "\n[+] Please enter the column number: ";
         cin >> obj->columno;
-        cout << "\n[+] The column number is " << obj->columno;
+        std::cout << "\n[+] The column number is " << obj->columno;
         getchar();
         fq.push(obj);
     }
-    cout << "\n[+] Would you like to add more files[Y/n]: ";
+    std::cout << "\n[+] Would you like to add more files[Y/n]: ";
     if (toupper(choice = getchar()) == 'Y' && flag)
     {
         getchar();
@@ -142,53 +145,63 @@ void openFile()
     }
     else
     {
-        cout << "\n[+] Starting " << fq.size() << " transfer(s)..." << endl;
+        std::cout << "\n[+] Starting " << fq.size() << " transfer(s)..." << endl;
     }
 }
 
 int main(int argc, char **args)
 {
     nsock sockfd;
-    sockaddrinfo sockdesc;
+    addrinfo sockdesc;
     if (argc != 2)
     {
         cerr << "\n[-] Usage: " << args[0] << " server-name/ip-address";
         exit(-1);
     }
+    addrinfo *result = NULL, *ptr = NULL;
 #ifdef _WIN32
     WSADATA WSAData;
-    sockaddrinfo *result = NULL, *ptr = NULL;
     if (WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
     {
         cerr << "\n[-] WSAStartup failed";
         exit(-1);
     }
     ZeroMemory(&sockdesc, sizeof(sockdesc));
+#endif
     sockdesc.ai_family = AF_INET;
     sockdesc.ai_socktype = SOCK_STREAM;
     sockdesc.ai_protocol = IPPROTO_TCP;
-
-    if ((getaddrinfo(args[1], W_PORT, &sockdesc, &result)))
+    sockdesc.ai_flags = AI_PASSIVE;
+    int iResult = 0;
+    if ((iResult = getaddrinfo(args[1], W_PORT, &sockdesc, &result)) != 0)
     {
-        cerr << "\n[-] Failed to resolve server error-code: " << WSAGetLastError();
+        cerr << "\n[-] Failed to resolve server error-Code: " << gai_strerror(iResult);
+#ifdef _WIN32
         WSACleanup();
+#endif
         return 1;
     }
     //Connect to one of the resolved addresses
     for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
     {
         //create a socket
-        if ((sockfd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol)) == INVALID_SOCKET)
+        if ((sockfd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol)) == -1)
         {
-            cerr << "\n[-] socket creation failed with error " << WSAGetLastError();
+            cerr << "\n[-] socket creation failed with error -1";
+#ifdef _WIN32
             WSACleanup();
+#endif
             return 1;
         }
         //connect to the server
-        if ((connect(sockfd, ptr->ai_addr, (int)ptr->ai_addrlen)) == SOCKET_ERROR)
+        if ((connect(sockfd, ptr->ai_addr, (int)ptr->ai_addrlen)) == -1)
         {
+#ifdef _WIN32
             closesocket(sockfd);
-            sockfd = INVALID_SOCKET;
+#else
+            close(sockfd);
+#endif
+            sockfd = -1;
             continue;
         }
         break;
@@ -197,32 +210,13 @@ int main(int argc, char **args)
     if (sockfd == -1)
     {
         cerr << "\n[-] unable to connect to the server ";
+#ifdef _WIN32
         WSACleanup();
+#endif
         return 1;
     }
-    cout << "\n[+] socket creation successful sock_fd:" << sockfd;
-#endif
-#ifdef __linux__
-    //create a socket
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
-    {
-        cerr << "[-] socket creation successful sock_fd:" << sockfd << endl;
-        exit(-1);
-    }
-    cout << "[+] socket creation successfull sock_fd:" << sockfd << endl;
-    sockdesc.sin_family = AF_INET;
-    sockdesc.sin_port = htons(PORT);
-    sockdesc.sin_addr.s_addr = INADDR_ANY;
-    memset(sockdesc.sin_zero, 0, sizeof(sockdesc.sin_zero));
-    long sockdescsize = sizeof(sockdesc);
-
-    if ((connect(sockfd, (struct sockaddr *)&sockdesc, sockdescsize)) == -1)
-    {
-        cerr << "[-] connection to the server failed \n";
-        exit(-2);
-    }
-#endif
-    cout << "[+] connected to the server on port " << PORT << endl;
+    std::cout << "\n[+] socket creation successful sock_fd:" << sockfd;
+    std::cout << "\n[+] connected to the server on port " << PORT << endl;
     openFile();
     long filecount = fq.size();
     if (!sendlong(sockfd, filecount))
@@ -231,8 +225,8 @@ int main(int argc, char **args)
     }
     while (!fq.empty())
     {
-        cout << "\n[+] Transferring " << fq.front()->filename << endl;
-        cout << (sendfile(sockfd, fq.front()) ? "\nTransfer successful" : "\nTransfer failed") << endl;
+        std::cout << "\n[+] Transferring " << fq.front()->filename << endl;
+        std::cout << (sendfile(sockfd, fq.front()) ? "\nTransfer successful" : "\nTransfer failed") << endl;
         removeFileFromQueue(fq);
     }
 
