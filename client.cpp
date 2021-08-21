@@ -108,12 +108,12 @@ void openFile()
     char choice;
     bool flag = true;
     FILE *filehandle;
-    std::cout << "\nPlease enter the filename or the path to the file: ";
+    cout << "\nPlease enter the filename or the path to the file: ";
     getline(cin, file);
     fileQueue *obj = new fileQueue(file);
     if (obj->fp == NULL)
     {
-        std::cout << "\n[+] Would you like to retry[Y/n]: ";
+        cout << "\n[+] Would you like to retry[Y/n]: ";
         if (toupper(choice = getchar()) == 'Y')
         {
             getchar();
@@ -122,22 +122,22 @@ void openFile()
         else
         {
             flag = false;
-            std::cout << "\n[+] Starting " << fq.size() << " transfer(s)...";
+            cout << "\n[+] Starting " << fq.size() << " transfer(s)...";
             return;
         }
     }
     else
     {
-        std::cout << "\n[+] Please enter the delimiter: ";
+        cout << "\n[+] Please enter the delimiter: ";
         obj->delimiter = getchar();
-        std::cout << "\n[+] The delimiter is " << obj->delimiter;
-        std::cout << "\n[+] Please enter the column number: ";
+        cout << "\n[+] The delimiter is " << obj->delimiter;
+        cout << "\n[+] Please enter the column number: ";
         cin >> obj->columno;
-        std::cout << "\n[+] The column number is " << obj->columno;
+        cout << "\n[+] The column number is " << obj->columno;
         getchar();
         fq.push(obj);
     }
-    std::cout << "\n[+] Would you like to add more files[Y/n]: ";
+    cout << "\n[+] Would you like to add more files[Y/n]: ";
     if (toupper(choice = getchar()) == 'Y' && flag)
     {
         getchar();
@@ -145,7 +145,7 @@ void openFile()
     }
     else
     {
-        std::cout << "\n[+] Starting " << fq.size() << " transfer(s)..." << endl;
+        cout << "\n[+] Starting " << fq.size() << " transfer(s)..." << endl;
     }
 }
 
@@ -215,8 +215,8 @@ int main(int argc, char **args)
 #endif
         return 1;
     }
-    std::cout << "\n[+] socket creation successful sock_fd:" << sockfd;
-    std::cout << "\n[+] connected to the server on port " << PORT << endl;
+    cout << "\n[+] socket creation successful sock_fd:" << sockfd;
+    cout << "\n[+] connected to the server on port " << PORT << endl;
     openFile();
     long filecount = fq.size();
     if (!sendlong(sockfd, filecount))
@@ -225,8 +225,8 @@ int main(int argc, char **args)
     }
     while (!fq.empty())
     {
-        std::cout << "\n[+] Transferring " << fq.front()->filename << endl;
-        std::cout << (sendfile(sockfd, fq.front()) ? "\nTransfer successful" : "\nTransfer failed") << endl;
+        cout << "\n[+] Transferring " << fq.front()->filename << endl;
+        cout << (sendfile(sockfd, fq.front()) ? "\nTransfer successful" : "\nTransfer failed") << endl;
         removeFileFromQueue(fq);
     }
 
