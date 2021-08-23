@@ -3,7 +3,7 @@ A client-server architecture in C++ using sockets to transfer multiple files
 <hr>
 
 ## LINUX:
-The default gcc compiler that comes with the linux distributions is enough to compile and run the code.<br>
+The default `gcc` compiler that comes with the linux distributions is enough to compile and run the code.<br>
 >Server : `g++ -std=c++17 -pthread server.cpp -o server`<br>
 >
 >Client : `g++ -std=c++17 -pthread client.cpp -o client`<br>
